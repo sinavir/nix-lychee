@@ -174,7 +174,16 @@ in
       };
     };
   };
-  config = lib.mkIf cfg.enable {
+  config = let srcDirsToBindMount = [
+    "app"
+    "bootstrap"
+    "config"
+    "ressources"
+    "routes"
+    "scripts"
+    "vendor"
+  ];
+  in lib.mkIf cfg.enable {
     services.nginx = {
       enable = true;
       virtualHosts.${cfg.website} = {
@@ -210,7 +219,8 @@ in
         '';
       };
     };
-    systemd.tmpfiles.rules = [
+    systemd.tmpfiles.rules = let srcDirToTmpFile = dir: "d ${cfg.stateDirectory}/www/${dir} 0750 ${cfg.user} ${config.services.nginx.group}";
+    in [
       "d ${cfg.stateDirectory} 0750 ${cfg.user} ${config.services.nginx.group}"
       "d ${cfg.stateDirectory}/www 0750 ${cfg.user} ${config.services.nginx.group}"
       "C ${cfg.stateDirectory}/public - ${cfg.user} ${config.services.nginx.group} - ${src}/public"
@@ -220,27 +230,28 @@ in
       "C ${cfg.settings.LYCHEE_UPLOADS} - ${cfg.user} ${config.services.nginx.group} - ${src}/public/uploads"
       "Z ${cfg.settings.LYCHEE_UPLOADS} 0750 ${cfg.user} ${config.services.nginx.group} - -"
       "f ${cfg.settings.DB_DATABASE} 0750 ${cfg.user} ${cfg.user}"
-    ];
-    systemd.mounts."lychee-install-www" = {
+    ] ++ (builtins.map srcDirToTmpFile srcDirsToBindMount);
+    systemd.mounts = let sourceDirToSystemdMount = dir: {
       before = [ "phpfpm-${cfg.website}.service" ];
-      what = src;
-      where = cfg.stateDirectory + /www;
+      wantedBy = [ "phpfpm-${cfg.website}.service" ];
+      what = "${src}/${dir}";
+      where = cfg.stateDirectory + "/www/${dir}";
       options = "bind";
     };
-    systemd.mounts."lychee-install-public" = {
-      after = [ "lychee-install-www.mount" ];
+    in [{
       before = [ "phpfpm-${cfg.website}.service" ];
-      what = cfg.stateDirectory + /public;
-      where = cfg.stateDirectory + /www/public;
+      wantedBy = [ "phpfpm-${cfg.website}.service" ];
+      what = cfg.stateDirectory + "/public";
+      where = cfg.stateDirectory + "/www/public";
       options = "bind";
-    };
-    systemd.mounts."lychee-install-storage" = {
-      after = [ "lychee-install-www.mount" ];
+    }
+    {
       before = [ "phpfpm-${cfg.website}.service" ];
-      what = cfg.stateDirectory + /storage;
-      where = cfg.stateDirectory + /www/storage;
+      wantedBy = [ "phpfpm-${cfg.website}.service" ];
+      what = cfg.stateDirectory + "/storage";
+      where = cfg.stateDirectory + "/www/storage";
       options = "bind";
-    };
+    }] ++ (builtins.map sourceDirToSystemdMount srcDirsToBindMount);
     services.phpfpm.pools.${cfg.website} = {
       user = cfg.user;
       phpPackage = pkgs.php81.withExtensions ({ enabled, all }:
