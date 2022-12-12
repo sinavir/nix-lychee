@@ -221,18 +221,25 @@ in
       "Z ${cfg.settings.LYCHEE_UPLOADS} 0750 ${cfg.user} ${config.services.nginx.group} - -"
       "f ${cfg.settings.DB_DATABASE} 0750 ${cfg.user} ${cfg.user}"
     ];
-    systemd.services."lychee-install" = {
-      description = "Lychee one shot service to install php source into stateDirectory";
-      wantedBy = [ "phpfpm-${cfg.website}.service" ];
-      script = ''
-        ${pkgs.mount}/bin/mount --bind ${src} ${cfg.stateDirectory}/www/
-        ${pkgs.mount}/bin/mount --bind ${cfg.stateDirectory}/public/ ${cfg.stateDirectory}/www/public/
-        ${pkgs.mount}/bin/mount --bind ${cfg.stateDirectory}/storage/ ${cfg.stateDirectory}/www/storage/
-        '';
-      serviceConfig = {
-        Type = "oneshot";
-        Restart = "on-failure";
-      };
+    systemd.mounts."lychee-install-www" = {
+      before = [ "phpfpm-${cfg.website}.service" ];
+      what = src;
+      where = cfg.stateDirectory + /www;
+      options = "bind";
+    };
+    systemd.mounts."lychee-install-public" = {
+      after = [ "lychee-install-www.mount" ];
+      before = [ "phpfpm-${cfg.website}.service" ];
+      what = cfg.stateDirectory + /public;
+      where = cfg.stateDirectory + /www/public;
+      options = "bind";
+    };
+    systemd.mounts."lychee-install-storage" = {
+      after = [ "lychee-install-www.mount" ];
+      before = [ "phpfpm-${cfg.website}.service" ];
+      what = cfg.stateDirectory + /storage;
+      where = cfg.stateDirectory + /www/storage;
+      options = "bind";
     };
     services.phpfpm.pools.${cfg.website} = {
       user = cfg.user;
