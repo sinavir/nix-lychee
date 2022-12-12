@@ -1,4 +1,4 @@
-{ stdenv, fetchzip, pkgs }:
+{ stdenv, fetchzip, pkgs, env ? {} }:
 stdenv.mkDerivation rec {
   pname = "Lychee";
   version = "4.6.2";
